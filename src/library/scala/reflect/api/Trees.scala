@@ -8,23 +8,22 @@ package api
 
 import scala.collection.mutable.ListBuffer
 
-//import scala.tools.nsc.util.{ FreshNameCreator, HashSet, SourceFile }
-
-trait Trees /*extends reflect.generic.Trees*/ { self: Universe =>
+// Syncnote: Trees are currently not thread-safe.
+trait Trees { self: Universe =>
 
   private[scala] var nodeCount = 0
 
   type Modifiers <: AbsModifiers
 
   abstract class AbsModifiers {
-    def hasModifier(mod: Modifier.Value): Boolean
-    def allModifiers: Set[Modifier.Value]
+    def modifiers: Set[Modifier]
+    def hasModifier(mod: Modifier): Boolean
     def privateWithin: Name  // default: EmptyTypeName
     def annotations: List[Tree] // default: List()
     def mapAnnotations(f: List[Tree] => List[Tree]): Modifiers
   }
 
-  def Modifiers(mods: Set[Modifier.Value] = Set(),
+  def Modifiers(mods: Set[Modifier] = Set(),
                 privateWithin: Name = EmptyTypeName,
                 annotations: List[Tree] = List()): Modifiers
 
@@ -477,6 +476,17 @@ trait Trees /*extends reflect.generic.Trees*/ { self: Universe =>
    */
   case class New(tpt: Tree) extends TermTree
 
+  /** Factory method for object creation `new tpt(args_1)...(args_n)`
+   *  A `New(t, as)` is expanded to: `(new t).<init>(as)`
+   */
+  def New(tpt: Tree, argss: List[List[Tree]]): Tree = {
+    assert(!argss.isEmpty)
+    // todo. we need to expose names in scala.reflect.api
+//    val superRef: Tree = Select(New(tpt), nme.CONSTRUCTOR)
+    val superRef: Tree = Select(New(tpt), nme.CONSTRUCTOR)
+    (superRef /: argss) (Apply)
+  }
+
   /** Type annotation, eliminated by explicit outer */
   case class Typed(expr: Tree, tpt: Tree)
        extends TermTree
@@ -538,15 +548,24 @@ trait Trees /*extends reflect.generic.Trees*/ { self: Universe =>
     // The symbol of a This is the class to which the this refers.
     // For instance in C.this, it would be C.
 
+  def This(sym: Symbol): Tree =
+    This(sym.name.toTypeName) setSymbol sym
+
   /** Designator <qualifier> . <name> */
   case class Select(qualifier: Tree, name: Name)
        extends RefTree
+
+  def Select(qualifier: Tree, name: String): Select =
+    Select(qualifier, newTermName(name))
 
   def Select(qualifier: Tree, sym: Symbol): Select =
     Select(qualifier, sym.name) setSymbol sym
 
   /** Identifier <name> */
-  case class Ident(name: Name) extends RefTree { }
+  case class Ident(name: Name) extends RefTree
+
+  def Ident(name: String): Ident =
+    Ident(newTermName(name))
 
   def Ident(sym: Symbol): Ident =
     Ident(sym.name) setSymbol sym
@@ -624,7 +643,12 @@ trait Trees /*extends reflect.generic.Trees*/ { self: Universe =>
   }
 
   def TypeTree(tp: Type): TypeTree = TypeTree() setType tp
-  
+
+  /** An empty deferred value definition corresponding to:
+   *    val _: _
+   *  This is used as a placeholder in the `self` parameter Template if there is
+   *  no definition of a self value of self type.
+   */
   def emptyValDef: ValDef
 
   // ------ traversers, copiers, and transformers ---------------------------------------------
@@ -1116,9 +1140,9 @@ trait Trees /*extends reflect.generic.Trees*/ { self: Universe =>
   abstract class Transformer {
     val treeCopy: TreeCopier = newLazyTreeCopier
     protected var currentOwner: Symbol = definitions.RootClass
-    protected def currentMethod = currentOwner.enclMethod
-    protected def currentClass = currentOwner.enclClass
-    protected def currentPackage = currentOwner.toplevelClass.owner
+    protected def currentMethod = currentOwner.enclosingMethod
+    protected def currentClass = currentOwner.enclosingClass
+    protected def currentPackage = currentOwner.enclosingTopLevelClass.owner
     def transform(tree: Tree): Tree = tree match {
       case EmptyTree =>
         tree

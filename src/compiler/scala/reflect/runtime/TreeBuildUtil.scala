@@ -2,12 +2,9 @@ package scala.reflect
 package runtime
 
 trait TreeBuildUtil extends Universe with api.TreeBuildUtil {
-
-  def staticClass(fullname: String): Symbol = definitions.getClass(newTypeName(fullname))
-  def staticModule(fullname: String): Symbol = definitions.getModule(newTermName(fullname))
-
-  def thisModuleType(fullname: String) =
-    definitions.getModule(fullname).moduleClass.thisType
+  def staticClass(fullname: String): Symbol = definitions.getRequiredClass(fullname)
+  def staticModule(fullname: String): Symbol = definitions.getRequiredModule(fullname)
+  def thisModuleType(fullname: String) = staticModule(fullname).moduleClass.thisType
 
  /** Selects type symbol with given name from the defined members of prefix type
    */
@@ -41,7 +38,7 @@ trait TreeBuildUtil extends Universe with api.TreeBuildUtil {
     selectIn(owner.info, idx)
   }
 
-  def freeVar(name: String, info: Type, value: Any) = new FreeVar(name, info, value)
+  def newFreeVar(name: String, info: Type, value: Any) = newFreeVar(newTermName(name), info, value)
 
   def modifiersFromInternalFlags(flags: Long, privateWithin: Name, annotations: List[Tree]): Modifiers =
     Modifiers(flags, privateWithin, annotations)

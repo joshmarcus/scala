@@ -13,7 +13,6 @@ import java.{ lang => jl }
 import java.math.{ MathContext, BigDecimal => BigDec }
 import scala.collection.immutable.NumericRange
 
-import annotation.migration
 
 /**
  *  @author  Stephane Micheloud
@@ -34,8 +33,10 @@ object BigDecimal {
   /** Cache ony for defaultMathContext using BigDecimals in a small range. */
   private lazy val cache = new Array[BigDecimal](maxCached - minCached + 1)
 
-  object RoundingMode extends Enumeration(java.math.RoundingMode.values map (_.toString) : _*) with Serializable {
+  object RoundingMode extends Enumeration {
     type RoundingMode = Value
+    // These are supposed to be the same as java.math.RoundingMode.values,
+    // though it seems unwise to rely on the correspondence.
     val UP, DOWN, CEILING, FLOOR, HALF_UP, HALF_DOWN, HALF_EVEN, UNNECESSARY = Value
   }
 
